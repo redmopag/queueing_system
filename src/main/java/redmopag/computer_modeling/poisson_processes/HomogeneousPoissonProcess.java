@@ -23,7 +23,7 @@ public class HomogeneousPoissonProcess implements PoissonProcess{
         return -Math.log(1-u) / h; // Экспоненциальное распределение
     }
 
-    public List<Double> generateProcess() {
+    public List<Double> generateProcess(int day) {
         List<Double> times = new ArrayList<>();
         double t = tStart;
 

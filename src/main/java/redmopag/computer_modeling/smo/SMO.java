@@ -1,6 +1,8 @@
 package redmopag.computer_modeling.smo;
 
+import redmopag.computer_modeling.intensity.Intensity;
 import redmopag.computer_modeling.models.Client;
+import redmopag.computer_modeling.poisson_processes.NonHomogeneousPoissonProcess;
 import redmopag.computer_modeling.poisson_processes.PoissonProcess;
 
 import java.util.*;
@@ -26,11 +28,11 @@ public class SMO {
     private double startBusy;
 
     public SMO(double tStart, double T, int simulationDays,
-               PoissonProcess poissonProcess, double meanServiceTime) {
+               Intensity intensity, double meanServiceTime) {
         this.T = T;
         this.tStart = tStart;
         this.simulationDays = simulationDays;
-        this.poissonProcess = poissonProcess;
+        this.poissonProcess = new NonHomogeneousPoissonProcess(intensity, tStart, T);
         this.meanServiceTime = meanServiceTime;
     }
 
@@ -38,19 +40,19 @@ public class SMO {
     Основная функция - симуляция СМО
      */
     public void doSimulation(){
-        for(int i = 1; i <= simulationDays; ++i){
+        for(int day = 1; day <= simulationDays; ++day){
             td = Double.MAX_VALUE; n = 0; // Инициализация переменных
-            List<Double> arrivals = poissonProcess.generateProcess(); // Генерация прибытия клиентов
+            List<Double> arrivals = poissonProcess.generateProcess(day); // Генерация прибытия клиентов
 
             for(var clientArrival : arrivals){
                 if(clientArrival <= td && clientArrival <= T){ // Случай - прибытие клиента
-                    clientArrivalHandler(clientArrival, i);
+                    clientArrivalHandler(clientArrival, day);
                 } else if(td < clientArrival && td <= T){ // Случай - уход клиента
-                    clientDepartureHandler(clientArrival, i);
+                    clientDepartureHandler(clientArrival, day);
                 } else if(Math.min(clientArrival, td) > T && n > 0){ // Случай - переработка (обслуживание после T)
-                    overworkHandler(i);
+                    overworkHandler(day);
                 } else if(Math.min(clientArrival, td) > T && n == 0){ // Случай - конец работы
-                    endWorkHandler(i);
+                    endWorkHandler(day);
                 }
             }
         }

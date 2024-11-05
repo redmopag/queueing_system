@@ -5,7 +5,7 @@ import java.util.List;
 public class CafeIntensity  implements Intensity{
 
     @Override
-    public double intensity(double t) { // t измеряется в часах
+    public double intensity(double t, int day) { // t измеряется в часах
         if(10.5 <= t && t < 11){
             return 100;
         } else if(11 <= t && t < 11.5){
