@@ -20,6 +20,10 @@ public class SMO {
     private int n; // Общее кол-во клиентов в системе
     private int Na = 0, Nd = 0; // Кол-во пришедших и ушедших клиентов
     private double Tp = 0; // Время переработки
+    private List<Map.Entry<Double, Integer>> Q = new ArrayList<>(); // Изменения кол-ва клиентов в системе: время, кол-во клиентов
+    // Интервалы занятости устройства: время занятия, время освобождения
+    private List<Map.Entry<Double, Double>> busyIntervals = new ArrayList<>();
+    private double startBusy;
 
     public SMO(double tStart, double T, int simulationDays,
                PoissonProcess poissonProcess, double meanServiceTime) {
@@ -57,17 +61,25 @@ public class SMO {
      */
     private void clientArrivalHandler(double t, int serviceDay){
         ++n; ++Na;
+
+        // Добавляем клиента в очередь
         Client client = new Client();
         client.setArrivalTime(t);
         clientsQueue.add(client);
 
-        if(n == 1){ // Если устройство свободно
+        // Фиксируем изменение кол-ва человек в системе
+        Q.add(new AbstractMap.SimpleEntry<>(t, n));
+
+        if(n == 1){ // Если устройство свободно, то обслуживаем клиента
             double serviceTime = serviceTimeGeneration();
             td = t + serviceTime;
 
             client.setWaitingTime(0);
             client.setDepartureTime(td);
             client.setServiceDay(serviceDay);
+
+            // Фиксируем начало занятости устройства
+            startBusy = t;
         }
     }
 
@@ -76,10 +88,12 @@ public class SMO {
      */
     private void clientDepartureHandler(double t, int serviceDay){
         --n; ++Nd;
-        clientsQueue.remove();
+        clientsQueue.remove(); // Убираем обслуженного человека из очереди
+        Q.add(new AbstractMap.SimpleEntry<>(td, n)); // Фиксируем изменения кол-во человек в системе
 
         if (n == 0){ // Если пользователей нет, то обрабатываем приход клиента
             clientArrivalHandler(t, serviceDay);
+            busyIntervals.add(new AbstractMap.SimpleEntry<>(startBusy, td)); // Фиксируем интервал занятости устройства
         } else { // Иначе подсчитываем обслуживание пришедшего клиента, учитывая его ожидание
             Client nextClient = clientsQueue.remove();
             double serviceTime = serviceTimeGeneration();
@@ -97,8 +111,9 @@ public class SMO {
     private void overworkHandler(int serviceDay){
         --n; ++Nd;
         clientsQueue.remove();
+        Q.add(new AbstractMap.SimpleEntry<>(td,n));
 
-        if(n > 0){
+        if(n > 0){ // Если в системе остались пользователи после времени T, то нужно их обслужить
             Client nextClient = clientsQueue.remove();
             double serviceTime = serviceTimeGeneration();
 
@@ -126,11 +141,85 @@ public class SMO {
         return -(1/meanServiceTime)*Math.log(1-u);
     }
 
+    /*
+    Среднее время клиента в системе
+     */
+    public double averageTimeInSystem(){
+        double sum = 0;
+        for(var client : clients){
+            sum += client.getDepartureTime() - client.getArrivalTime();
+        }
+
+        return sum / Na;
+    }
+
+    /*
+    Среднее время ожидания клиента в системе
+     */
+    public double averageWaitingTime(){
+        double sum = 0;
+        for(var client : clients){
+            sum += client.getWaitingTime();
+        }
+
+        return sum / Na;
+    }
+
+    /*
+    Среднее число клиентов в очереди
+     */
+    public double averageClientsInQueue(){
+        double lastTime = 0;
+        double totalQ = 0;
+        double totalTime = (T - tStart) * simulationDays; // Всё время работы СМО
+
+        for(var qCurrent : Q){
+            totalQ += (qCurrent.getKey() - lastTime) * (qCurrent.getValue() - 1);
+        }
+
+        return totalQ / totalTime;
+    }
+
+    /*
+    Оценка занятости устройства
+     */
+    public double deviceOccupancy(){
+        double totalBusyTime = 0;
+        double totalTime = (T - tStart) * simulationDays;
+
+        for(var busyInterval : busyIntervals){
+            // сумма (tEnd - tStart) занятости устройства
+            totalBusyTime += (busyInterval.getValue() - busyInterval.getKey());
+        }
+
+        return totalBusyTime / totalTime;
+    }
+
     public void printStatistic(){
         System.out.println("Результаты моделирования:");
         System.out.println("Общее число прибытий Na: " + Na);
         System.out.println("Общее число уходов Nd: " + Nd);
         System.out.println("Время переработки Tp" + Tp);
-        System.out.println();
+        System.out.println("Среднее время пребывания клиента в системе St: " + averageTimeInSystem());
+        System.out.println("Среднее время ожидания в очереди Wср: " + averageWaitingTime());
+        System.out.println("Среднее число клиентов в очереди Qср: " + averageClientsInQueue());
+        System.out.println("Занятость устройства p: " + deviceOccupancy());
+
+        System.out.println("Данные о клиентах:");
+
+        String[] headers = {"Клиент", "День", "Приход", "Ожидание", "Уход"};
+        int[] columnWidths = {6, 4, 6, 8, 4};
+
+        for(int i = 0; i < headers.length; ++i){
+            System.out.printf("%-" + columnWidths[i] + "s", headers[i]);
+        }
+
+        for(int i = 0; i < clients.size(); ++i){
+            System.out.printf("%-6d", i + 1);
+            System.out.printf("%-4d", clients.get(i).getServiceDay());
+            System.out.printf("%-6.2f", clients.get(i).getArrivalTime());
+            System.out.printf("%-8.2f", clients.get(i).getWaitingTime());
+            System.out.printf("%-4.2f", clients.get(i).getDepartureTime());
+        }
     }
 }
